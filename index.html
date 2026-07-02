@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111111">
+<title>Шахматные часы</title>
+<style>
+  :root {
+    --gap: 10px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  #app {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    gap: var(--gap);
+  }
+
+  .player {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    font-size: 20vw;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #111;
+    background: #e8e8e8;
+    transition: background .15s, color .15s;
+    cursor: pointer;
+    position: relative;
+  }
+  .player.top { transform: rotate(180deg); }
+
+  .player.active { background: #4caf50; color: #fff; }
+  .player.lowtime.active { background: #ff9800; }
+  .player.flagged { background: #c62828; color: #fff; }
+
+  .player .moves {
+    font-size: 4.5vw;
+    font-weight: 500;
+    opacity: .55;
+    margin-top: 2vh;
+  }
+
+  /* Центральная панель управления */
+  #controls {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 14px;
+    z-index: 10;
+  }
+  #controls button {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(20,20,20,.85);
+    color: #fff;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,.4);
+  }
+  #controls button:active { transform: scale(.92); }
+
+  /* Экран настроек */
+  #setup {
+    position: fixed;
+    inset: 0;
+    background: #1a1a1a;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 26px;
+    z-index: 50;
+    padding: 24px;
+  }
+  #setup h1 { font-size: 26px; font-weight: 700; }
+  .presets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 100%; max-width: 340px; }
+  .presets button {
+    padding: 16px;
+    border: 1px solid #444;
+    background: #262626;
+    color: #eee;
+    border-radius: 12px;
+    font-size: 17px;
+    cursor: pointer;
+  }
+  .presets button:active { background: #333; }
+  .custom { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; justify-content: center; }
+  .custom label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #aaa; }
+  .custom input {
+    width: 92px; padding: 12px; font-size: 18px; text-align: center;
+    background: #262626; border: 1px solid #444; color: #eee; border-radius: 10px;
+  }
+  #startBtn {
+    padding: 16px 40px; font-size: 19px; font-weight: 600;
+    background: #4caf50; color: #fff; border: none; border-radius: 12px; cursor: pointer;
+  }
+  .hint { font-size: 13px; color: #777; max-width: 340px; text-align: center; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div id="app" style="display:none">
+  <button class="player top" id="pTop">
+    <span class="time">5:00</span>
+    <span class="moves">ходов: 0</span>
+  </button>
+
+  <div id="controls">
+    <button id="pauseBtn" title="Пауза">⏸</button>
+    <button id="resetBtn" title="Сброс">⟳</button>
+  </div>
+
+  <button class="player bottom" id="pBottom">
+    <span class="time">5:00</span>
+    <span class="moves">ходов: 0</span>
+  </button>
+</div>
+
+<div id="setup">
+  <h1>♟ Шахматные часы</h1>
+  <div class="presets">
+    <button data-min="1"  data-inc="0">1 мин · Пуля</button>
+    <button data-min="3"  data-inc="2">3 + 2 · Блиц</button>
+    <button data-min="5"  data-inc="0">5 мин · Блиц</button>
+    <button data-min="10" data-inc="0">10 мин · Рапид</button>
+    <button data-min="15" data-inc="10">15 + 10</button>
+    <button data-min="30" data-inc="0">30 мин</button>
+  </div>
+  <div class="custom">
+    <label>Минуты
+      <input type="number" id="minInput" value="5" min="0" max="180">
+    </label>
+    <label>Добавка, сек
+      <input type="number" id="incInput" value="0" min="0" max="60">
+    </label>
+  </div>
+  <button id="startBtn">Начать</button>
+  <p class="hint">Нажимай на свою половину экрана, чтобы передать ход сопернику. Верхняя половина повёрнута — для игрока напротив.</p>
+</div>
+
+<script>
+(function () {
+  let baseMs = 5 * 60 * 1000;
+  let incMs = 0;
+
+  const state = {
+    top:    { ms: baseMs, moves: 0 },
+    bottom: { ms: baseMs, moves: 0 },
+    active: null,      // 'top' | 'bottom' | null
+    running: false,
+    paused: false,
+    lastTick: 0,
+  };
+
+  const els = {
+    app: document.getElementById('app'),
+    setup: document.getElementById('setup'),
+    top: document.getElementById('pTop'),
+    bottom: document.getElementById('pBottom'),
+    pause: document.getElementById('pauseBtn'),
+    reset: document.getElementById('resetBtn'),
+    start: document.getElementById('startBtn'),
+    minInput: document.getElementById('minInput'),
+    incInput: document.getElementById('incInput'),
+  };
+  els.top.timeEl = els.top.querySelector('.time');
+  els.top.movesEl = els.top.querySelector('.moves');
+  els.bottom.timeEl = els.bottom.querySelector('.time');
+  els.bottom.movesEl = els.bottom.querySelector('.moves');
+
+  function fmt(ms) {
+    if (ms < 0) ms = 0;
+    const totalSec = Math.ceil(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    if (ms < 10000) { // последние 10 сек — с десятыми
+      const t = Math.floor((ms % 1000) / 100);
+      return `${s}.${t}`;
+    }
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function render() {
+    for (const side of ['top', 'bottom']) {
+      const el = els[side];
+      const p = state[side];
+      el.timeEl.textContent = fmt(p.ms);
+      el.movesEl.textContent = 'ходов: ' + p.moves;
+      el.classList.toggle('active', state.active === side && state.running && !state.paused);
+      el.classList.toggle('lowtime', p.ms < 30000);
+      el.classList.toggle('flagged', p.ms <= 0);
+    }
+    els.pause.textContent = state.paused ? '▶' : '⏸';
+  }
+
+  function loop() {
+    if (!state.running || state.paused || !state.active) return;
+    const now = performance.now();
+    const dt = now - state.lastTick;
+    state.lastTick = now;
+    const p = state[state.active];
+    p.ms -= dt;
+    if (p.ms <= 0) {
+      p.ms = 0;
+      state.running = false;
+      state.active = null;
+      beep(true);
+      render();
+      return;
+    }
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // Аудио-сигнал
+  let audioCtx;
+  function beep(long) {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.frequency.value = long ? 440 : 880;
+      g.gain.value = 0.12;
+      o.start();
+      o.stop(audioCtx.currentTime + (long ? 0.5 : 0.06));
+    } catch (e) {}
+  }
+
+  // Нажатие на половину игрока: останавливает свои часы, включает соперника
+  function tap(side) {
+    if (!state.running || state.paused) return;
+    // Нажимать может только тот, чьи часы идут (или самый первый ход — любой)
+    if (state.active === null) {
+      // первый ход делает нажавший — запускаем часы соперника
+      startSide(side === 'top' ? 'bottom' : 'top');
+      return;
+    }
+    if (state.active !== side) return; // не твой ход — игнор
+    // добавка за сделанный ход
+    state[side].ms += incMs;
+    state[side].moves += 1;
+    beep(false);
+    startSide(side === 'top' ? 'bottom' : 'top');
+  }
+
+  function startSide(side) {
+    state.active = side;
+    state.lastTick = performance.now();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  els.top.addEventListener('click', () => tap('top'));
+  els.bottom.addEventListener('click', () => tap('bottom'));
+
+  els.pause.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!state.running) return;
+    state.paused = !state.paused;
+    if (!state.paused && state.active) {
+      state.lastTick = performance.now();
+      requestAnimationFrame(loop);
+    }
+    render();
+  });
+
+  els.reset.addEventListener('click', (e) => {
+    e.stopPropagation();
+    els.app.style.display = 'none';
+    els.setup.style.display = 'flex';
+    state.running = false;
+    state.paused = false;
+    state.active = null;
+  });
+
+  function begin() {
+    state.top = { ms: baseMs, moves: 0 };
+    state.bottom = { ms: baseMs, moves: 0 };
+    state.active = null;      // ждём первого нажатия
+    state.running = true;
+    state.paused = false;
+    els.setup.style.display = 'none';
+    els.app.style.display = 'flex';
+    beep(false); // разблокировка звука по жесту
+    render();
+  }
+
+  // Пресеты
+  document.querySelectorAll('.presets button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      baseMs = parseInt(btn.dataset.min, 10) * 60000;
+      incMs = parseInt(btn.dataset.inc, 10) * 1000;
+      begin();
+    });
+  });
+
+  els.start.addEventListener('click', () => {
+    baseMs = Math.max(0, parseFloat(els.minInput.value) || 0) * 60000;
+    incMs = Math.max(0, parseInt(els.incInput.value, 10) || 0) * 1000;
+    if (baseMs === 0) baseMs = 60000;
+    begin();
+  });
+
+  // Не даём экрану гаснуть (если поддерживается)
+  let wakeLock = null;
+  async function keepAwake() {
+    try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') keepAwake();
+  });
+  keepAwake();
+})();
+</script>
+</body>
+</html>
